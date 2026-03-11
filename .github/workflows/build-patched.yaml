@@ -1,0 +1,61 @@
+name: Build Patched OBS (Windows)
+run-name: Patched OBS Windows Build 🔧
+
+on:
+  push:
+    branches:
+      - master
+      - 'whip-pacing-fix'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-event:
+    name: Event Data 🔎
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      commitHash: ${{ steps.setup.outputs.commitHash }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Get Commit Hash
+        id: setup
+        run: echo "commitHash=${GITHUB_SHA:0:9}" >> $GITHUB_OUTPUT
+
+  windows-build:
+    name: Windows Build 🪟
+    runs-on: windows-2022
+    needs: check-event
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build OBS Studio 🧱
+        uses: ./.github/actions/build-obs
+        with:
+          target: x64
+          config: RelWithDebInfo
+
+      - name: Package OBS Studio 📀
+        uses: ./.github/actions/package-obs
+        with:
+          target: x64
+          config: RelWithDebInfo
+          package: true
+
+      - name: Upload Artifacts 📡
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-studio-patched-windows-x64-${{ needs.check-event.outputs.commitHash }}
+          path: ${{ github.workspace }}/build_x64/obs-studio-*-windows-x64.zip

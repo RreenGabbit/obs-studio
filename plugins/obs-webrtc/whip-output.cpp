@@ -234,8 +234,10 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
 	if (video_bitrate != 0) {
-		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
-									    std::chrono::milliseconds(5)));
+		// Use 1.5x bitrate headroom (was 10x) to force real packet spreading
+		// Use 1ms interval (was 5ms) for finer pacing granularity
+		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 1500),
+									    std::chrono::milliseconds(1)));
 	}
 
 	video_track = peer_connection->addTrack(video_description);
