@@ -234,8 +234,10 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
 	if (video_bitrate != 0) {
-		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
-									    std::chrono::milliseconds(5)));
+		// 2x budget / 2ms interval — use with NVENC enableFillerDataInsertion=1
+		// Filler data normalizes frame sizes so 2x headroom is sufficient without slow-motion backlog
+		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 2000),
+									    std::chrono::milliseconds(2)));
 	}
 
 	video_track = peer_connection->addTrack(video_description);
