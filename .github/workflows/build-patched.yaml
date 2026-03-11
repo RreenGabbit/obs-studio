@@ -41,6 +41,13 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Fetch upstream tags 🏷️
+        shell: bash
+        run: |
+          git remote add upstream https://github.com/obsproject/obs-studio.git || true
+          git fetch upstream --tags --no-recurse-submodules
+          git tag -l | head -5
+
       - name: Build OBS Studio 🧱
         uses: ./.github/actions/build-obs
         with:
