@@ -234,12 +234,12 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
 	if (video_bitrate != 0) {
-		// Use 33ms interval (one frame period at 30fps) with 2x headroom.
-		// Sub-millisecond intervals (2ms, 5ms) fire unreliably on Windows due to the
-		// 15ms default timer resolution, causing burst/drought patterns that result in
-		// high jitter (16ms) and thousands of discarded RTP packets at the receiver.
-		// At 33ms the OS timer is reliable. The 2x budget covers one full frame + margin.
-		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 2000),
+		// 33ms interval (one frame period at 30fps) — reliably achievable on Windows
+		// even with the default 15ms timer resolution, unlike 2ms/5ms intervals which
+		// fire irregularly causing burst/drought (confirmed: was 169-2736 packets/s,
+		// 5244 discarded packets). 10x budget (330KB at 8Mbps) covers keyframes (~165KB,
+		// 5x a normal inter-frame) in a single 33ms window, preventing keyframe stutter.
+		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
 									    std::chrono::milliseconds(33)));
 	}
 
