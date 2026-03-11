@@ -233,9 +233,11 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(video_sr_reporter);
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
-	// NOTE: PacingHandler removed — use NVENC enableFillerDataInsertion=1 instead.
-	// The encoder-side filler normalizes frame sizes, making packet-level pacing redundant
-	// and harmful (causes latency accumulation at higher bitrates).
+	if (video_bitrate != 0) {
+		// 10x budget (original, safe for keyframes) + 2ms interval (smoother than original 5ms)
+		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
+									    std::chrono::milliseconds(2)));
+	}
 
 
 	video_track = peer_connection->addTrack(video_description);
