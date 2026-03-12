@@ -2,6 +2,7 @@
 #include "whip-utils.h"
 
 #include <obs.hpp>
+#include <cmath>
 
 /*
  * Sets the maximum size for a video fragment. Effective range is
@@ -28,6 +29,25 @@ const int video_nack_buffer_size = 4000;
 
 const std::string rtpHeaderExtUriMid = "urn:ietf:params:rtp-hdrext:sdes:mid";
 const std::string rtpHeaderExtUriRid = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
+
+static std::chrono::milliseconds GetVideoPacingInterval()
+{
+	struct obs_video_info ovi = {};
+
+	if (!obs_get_video_info(&ovi) || ovi.fps_num == 0 || ovi.fps_den == 0)
+		return std::chrono::milliseconds(33);
+
+	double fps = static_cast<double>(ovi.fps_num) / static_cast<double>(ovi.fps_den);
+	if (fps <= 0.0)
+		return std::chrono::milliseconds(33);
+
+	auto interval_ms = static_cast<int>(std::lround(1000.0 / fps));
+
+	/* Keep pacing smooth for higher frame rates without depending on
+	 * sub-5ms timers, and preserve the 33ms behavior for 30fps streams. */
+	interval_ms = std::clamp(interval_ms, 5, 33);
+	return std::chrono::milliseconds(interval_ms);
+}
 
 WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
 	: output(output),
@@ -234,13 +254,15 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
 	if (video_bitrate != 0) {
-		// 33ms interval (one frame period at 30fps) — reliably achievable on Windows
-		// even with the default 15ms timer resolution, unlike 2ms/5ms intervals which
-		// fire irregularly causing burst/drought (confirmed: was 169-2736 packets/s,
-		// 5244 discarded packets). 10x budget (330KB at 8Mbps) covers keyframes (~165KB,
-		// 5x a normal inter-frame) in a single 33ms window, preventing keyframe stutter.
-		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
-									    std::chrono::milliseconds(33)));
+		auto pacing_interval = GetVideoPacingInterval();
+
+		// Keep the burst budget large enough to flush keyframes in one pacing window,
+		// but match the pacing cadence to the configured output FPS so 60fps streams
+		// are not emitted in 33ms bursts that look like 30fps on lossy links.
+		packetizer->addToChain(
+			std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000), pacing_interval));
+		do_log(LOG_INFO, "WHIP video pacing: bitrate=%dkbps interval=%lldms", video_bitrate,
+		       static_cast<long long>(pacing_interval.count()));
 	}
 
 
