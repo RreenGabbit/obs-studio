@@ -47,6 +47,9 @@ private:
 	void ParseLinkHeader(std::string linkHeader, std::vector<rtc::IceServer> &iceServers);
 	void Send(void *data, uintptr_t size, uint64_t duration, std::shared_ptr<rtc::Track> track,
 		  std::shared_ptr<rtc::RtcpSrReporter> rtcp_sr_reporter);
+	void HandleVideoTrackMessage(rtc::binary data);
+	void MaybeForceVideoKeyframe();
+	bool ForceEncoderKeyframe(obs_encoder_t *encoder);
 
 	obs_output_t *output;
 
@@ -70,6 +73,8 @@ private:
 
 	std::atomic<size_t> total_bytes_sent;
 	std::atomic<int> connect_time_ms;
+	std::atomic<bool> keyframe_request_pending;
+	std::atomic<uint64_t> last_keyframe_request_ns;
 	int64_t start_time_ns;
 	int64_t last_audio_timestamp;
 };
