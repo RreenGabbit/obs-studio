@@ -3,7 +3,6 @@
 
 #include <obs.hpp>
 #include <cstddef>
-#include <cmath>
 #include <cstring>
 #include <variant>
 
@@ -63,25 +62,6 @@ static bool IsRtcpPliOrFir(const rtc::binary &data)
 	}
 
 	return false;
-}
-
-static std::chrono::milliseconds GetVideoPacingInterval()
-{
-	struct obs_video_info ovi = {};
-
-	if (!obs_get_video_info(&ovi) || ovi.fps_num == 0 || ovi.fps_den == 0)
-		return std::chrono::milliseconds(33);
-
-	double fps = static_cast<double>(ovi.fps_num) / static_cast<double>(ovi.fps_den);
-	if (fps <= 0.0)
-		return std::chrono::milliseconds(33);
-
-	auto interval_ms = static_cast<int>(std::lround(1000.0 / fps));
-
-	/* Keep pacing smooth for higher frame rates without depending on
-	 * sub-5ms timers, and preserve the 33ms behavior for 30fps streams. */
-	interval_ms = std::clamp(interval_ms, 5, 33);
-	return std::chrono::milliseconds(interval_ms);
 }
 
 WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
@@ -293,15 +273,9 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
 	if (video_bitrate != 0) {
-		auto pacing_interval = GetVideoPacingInterval();
-
-		// Keep the burst budget large enough to flush keyframes in one pacing window,
-		// but match the pacing cadence to the configured output FPS so 60fps streams
-		// are not emitted in 33ms bursts that look like 30fps on lossy links.
-		packetizer->addToChain(
-			std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000), pacing_interval));
-		do_log(LOG_INFO, "WHIP video pacing: bitrate=%dkbps interval=%lldms", video_bitrate,
-		       static_cast<long long>(pacing_interval.count()));
+		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
+									    std::chrono::milliseconds(5)));
+		do_log(LOG_INFO, "WHIP video pacing: bitrate=%dkbps interval=5ms", video_bitrate);
 	}
 
 
