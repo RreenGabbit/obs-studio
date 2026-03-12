@@ -2,8 +2,10 @@
 #include "whip-utils.h"
 
 #include <obs.hpp>
+#include <cstddef>
 #include <cmath>
 #include <cstring>
+#include <variant>
 
 /*
  * Sets the maximum size for a video fragment. Effective range is
@@ -43,11 +45,12 @@ static bool IsRtcpPliOrFir(const rtc::binary &data)
 	size_t pos = 0;
 
 	while (pos + 4 <= data.size()) {
-		const uint8_t v_p_count = data[pos];
+		const uint8_t v_p_count = std::to_integer<uint8_t>(data[pos]);
 		const uint8_t version = v_p_count >> 6;
 		const uint8_t fmt = v_p_count & 0x1F;
-		const uint8_t payload_type = data[pos + 1];
-		const uint16_t length_words = (uint16_t(data[pos + 2]) << 8) | uint16_t(data[pos + 3]);
+		const uint8_t payload_type = std::to_integer<uint8_t>(data[pos + 1]);
+		const uint16_t length_words = (uint16_t(std::to_integer<uint8_t>(data[pos + 2])) << 8) |
+					      uint16_t(std::to_integer<uint8_t>(data[pos + 3]));
 		const size_t packet_size = (size_t(length_words) + 1) * 4;
 
 		if (version != 2 || packet_size < 4 || pos + packet_size > data.size())
@@ -304,7 +307,10 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 
 	video_track = peer_connection->addTrack(video_description);
 	video_track->setMediaHandler(packetizer);
-	video_track->onMessage([this](rtc::binary data) { HandleVideoTrackMessage(std::move(data)); });
+	video_track->onMessage([this](rtc::message_variant data) {
+		if (const auto *binary = std::get_if<rtc::binary>(&data))
+			HandleVideoTrackMessage(*binary);
+	});
 }
 
 /**
@@ -749,7 +755,7 @@ void WHIPOutput::StopThread(bool signal)
 	videoLayerStates.clear();
 }
 
-void WHIPOutput::HandleVideoTrackMessage(rtc::binary data)
+void WHIPOutput::HandleVideoTrackMessage(const rtc::binary &data)
 {
 	if (!IsRtcpPliOrFir(data))
 		return;

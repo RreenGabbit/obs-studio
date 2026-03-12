@@ -47,7 +47,7 @@ private:
 	void ParseLinkHeader(std::string linkHeader, std::vector<rtc::IceServer> &iceServers);
 	void Send(void *data, uintptr_t size, uint64_t duration, std::shared_ptr<rtc::Track> track,
 		  std::shared_ptr<rtc::RtcpSrReporter> rtcp_sr_reporter);
-	void HandleVideoTrackMessage(rtc::binary data);
+	void HandleVideoTrackMessage(const rtc::binary &data);
 	void MaybeForceVideoKeyframe();
 	bool ForceEncoderKeyframe(obs_encoder_t *encoder);
 
