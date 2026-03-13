@@ -1,0 +1,105 @@
+name: Release WHIP Windows
+run-name: Release WHIP Windows - ${{ github.ref_name }} 🪟
+
+on:
+  push:
+    tags:
+      - 'whip-fix-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check-tag:
+    name: Check Tag ☑️
+    runs-on: ubuntu-24.04
+    outputs:
+      validTag: ${{ steps.check.outputs.validTag }}
+      version: ${{ steps.check.outputs.version }}
+      commitHash: ${{ steps.check.outputs.commitHash }}
+    steps:
+      - name: Check Release Tag
+        id: check
+        shell: bash
+        run: |
+          shopt -s extglob
+          case "${GITHUB_REF_NAME}" in
+            whip-fix-v+([0-9]) )
+              echo 'validTag=true' >> $GITHUB_OUTPUT
+              echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo 'validTag=false' >> $GITHUB_OUTPUT
+              ;;
+          esac
+          echo "commitHash=${GITHUB_SHA:0:9}" >> $GITHUB_OUTPUT
+
+  windows-build:
+    name: Windows x64 Build 🧱
+    if: fromJSON(needs.check-tag.outputs.validTag)
+    runs-on: windows-2022
+    needs: check-tag
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build OBS Studio
+        uses: ./.github/actions/build-obs
+        env:
+          TWITCH_CLIENTID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_HASH: ${{ secrets.TWITCH_HASH }}
+          RESTREAM_CLIENTID: ${{ secrets.RESTREAM_CLIENTID }}
+          RESTREAM_HASH: ${{ secrets.RESTREAM_HASH }}
+          YOUTUBE_CLIENTID: ${{ secrets.YOUTUBE_CLIENTID }}
+          YOUTUBE_CLIENTID_HASH: ${{ secrets.YOUTUBE_CLIENTID_HASH }}
+          YOUTUBE_SECRET: ${{ secrets.YOUTUBE_SECRET }}
+          YOUTUBE_SECRET_HASH: ${{ secrets.YOUTUBE_SECRET_HASH }}
+          GPU_PRIORITY_VAL: ${{ secrets.GPU_PRIORITY_VAL }}
+        with:
+          target: x64
+          config: RelWithDebInfo
+
+      - name: Package OBS Studio
+        uses: ./.github/actions/package-obs
+        with:
+          target: x64
+          config: RelWithDebInfo
+          package: true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-studio-whip-windows-x64-${{ needs.check-tag.outputs.commitHash }}
+          path: ${{ github.workspace }}/build_x64/obs-studio-*-windows-x64.zip
+
+  create-release:
+    name: Attach Windows Asset 📦
+    if: fromJSON(needs.check-tag.outputs.validTag)
+    runs-on: ubuntu-24.04
+    needs: [check-tag, windows-build]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: obs-studio-whip-windows-x64-${{ needs.check-tag.outputs.commitHash }}
+          path: artifacts
+
+      - name: Rename Asset
+        shell: bash
+        run: |
+          mv artifacts/obs-studio-*-windows-x64.zip \
+            OBS-Studio-${{ needs.check-tag.outputs.version }}-Windows-x64.zip
+
+      - name: Create or Update Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191
+        with:
+          draft: false
+          prerelease: true
+          tag_name: ${{ needs.check-tag.outputs.version }}
+          name: WHIP Fix Build ${{ needs.check-tag.outputs.version }}
+          files: |
+            OBS-Studio-${{ needs.check-tag.outputs.version }}-Windows-x64.zip
