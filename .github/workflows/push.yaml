@@ -218,7 +218,13 @@ jobs:
 
   create-release:
     name: Create Release 🛫
-    if: github.ref_type == 'tag'
+    if: >-
+      ${{
+        always() &&
+        github.ref_type == 'tag' &&
+        needs.build-project.result == 'success' &&
+        (github.repository_owner != 'obsproject' || needs.sign-windows-build.result == 'success')
+      }}
     runs-on: ubuntu-24.04
     needs: [build-project, sign-windows-build]
     defaults:
