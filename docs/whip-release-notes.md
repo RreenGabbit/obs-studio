@@ -6,12 +6,9 @@ Scope
 - Not validated for `AMD` encoders
 
 What Changed
-- Restored upstream WHIP pacing interval to `5ms`
-- Kept WHIP pacing budget at `10x`
 - Added RTCP `PLI/FIR` handling to request an immediate NVENC IDR for recovery
 - Reduced `MAX_VIDEO_FRAGMENT_SIZE` from `1200` to `1000`
 - Added a WHIP-only NVENC VBV override of about `250ms`
-- Restored encoder option overrides on stop so the changes stay scoped to WHIP output
 
 Recommended OBS Settings
 - Encoder: `NVIDIA NVENC H.264`
