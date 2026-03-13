@@ -243,6 +243,11 @@ jobs:
               echo 'prerelease=true' >> $GITHUB_OUTPUT
               echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
               ;;
+            whip-fix-v+([0-9]) )
+              echo 'validTag=true' >> $GITHUB_OUTPUT
+              echo 'prerelease=true' >> $GITHUB_OUTPUT
+              echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+              ;;
             *) echo 'validTag=false' >> $GITHUB_OUTPUT ;;
           esac
 
@@ -266,37 +271,54 @@ jobs:
           ubuntu_2404_x86_64_artifact_name="obs-studio-ubuntu-24.04-x86_64-${commit_hash}"
           ubuntu_2404_x86_64_debug_name="obs-studio-ubuntu-24.04-x86_64-${commit_hash}-dbgsym"
           ubuntu_2404_sources_name="obs-studio-ubuntu-24.04-sources-${commit_hash}"
-          windows_x64_artifact_name="obs-studio-windows-x64-${{ steps.check.outputs.version }}-signed"
-          windows_x64_installer_name="obs-studio-windows-x64-${{ steps.check.outputs.version }}-installer"
-          windows_x64_debug_name="obs-studio-windows-x64-${{ steps.check.outputs.version }}-pdbs"
-          windows_arm64_artifact_name="obs-studio-windows-arm64-${{ steps.check.outputs.version }}-signed"
-          windows_arm64_debug_name="obs-studio-windows-arm64-${{ steps.check.outputs.version }}-pdbs"
+          if [[ "${GITHUB_REPOSITORY_OWNER}" == "obsproject" ]]; then
+            windows_x64_artifact_name="obs-studio-windows-x64-${{ steps.check.outputs.version }}-signed"
+            windows_x64_installer_name="obs-studio-windows-x64-${{ steps.check.outputs.version }}-installer"
+            windows_x64_debug_name="obs-studio-windows-x64-${{ steps.check.outputs.version }}-pdbs"
+            windows_arm64_artifact_name="obs-studio-windows-arm64-${{ steps.check.outputs.version }}-signed"
+            windows_arm64_debug_name="obs-studio-windows-arm64-${{ steps.check.outputs.version }}-pdbs"
+          else
+            windows_x64_artifact_name="obs-studio-windows-x64-${commit_hash}"
+            windows_arm64_artifact_name="obs-studio-windows-arm64-${commit_hash}"
+          fi
 
           echo '::group::Renaming Artifacts'
           mv -v "${macos_arm64_artifact_name}/"obs-studio-*-macos-apple.dmg \
             "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-macOS-Apple.dmg
-          mv -v "${macos_arm64_dsym_artifact_name}/"obs-studio-*-macos-apple-dSYMs.tar.xz \
-            "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-macOS-Apple-dSYMs.tar.xz
+          if [[ -d "${macos_arm64_dsym_artifact_name}" ]]; then
+            mv -v "${macos_arm64_dsym_artifact_name}/"obs-studio-*-macos-apple-dSYMs.tar.xz \
+              "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-macOS-Apple-dSYMs.tar.xz
+          fi
           mv -v "${macos_intel_artifact_name}/"obs-studio-*-macos-intel.dmg \
             "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-macOS-Intel.dmg
-          mv -v "${macos_intel_dsym_artifact_name}/"obs-studio-*-macos-intel-dSYMs.tar.xz \
-            "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-macOS-Intel-dSYMs.tar.xz
+          if [[ -d "${macos_intel_dsym_artifact_name}" ]]; then
+            mv -v "${macos_intel_dsym_artifact_name}/"obs-studio-*-macos-intel-dSYMs.tar.xz \
+              "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-macOS-Intel-dSYMs.tar.xz
+          fi
           mv -v "${ubuntu_2404_x86_64_artifact_name}/"obs-studio-*-x86_64-ubuntu-gnu.deb \
             "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Ubuntu-24.04-x86_64.deb
-          mv -v "${ubuntu_2404_x86_64_debug_name}/"obs-studio-*-x86_64-ubuntu-gnu-dbgsym.ddeb \
-            "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Ubuntu-24.04-x86_64-dbsym.ddeb
+          if [[ -d "${ubuntu_2404_x86_64_debug_name}" ]]; then
+            mv -v "${ubuntu_2404_x86_64_debug_name}/"obs-studio-*-x86_64-ubuntu-gnu-dbgsym.ddeb \
+              "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Ubuntu-24.04-x86_64-dbsym.ddeb
+          fi
           mv -v "${ubuntu_2404_sources_name}/"obs-studio-*-sources.tar.gz \
             "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Sources.tar.gz
-          mv -v "${windows_x64_artifact_name}/"OBS-Studio-*.zip \
+          mv -v "${windows_x64_artifact_name}/"obs-studio-*-windows-x64.zip \
             "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-x64.zip
-          mv -v "${windows_x64_installer_name}/"OBS-Studio-*.exe \
-            "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-x64-Installer.exe
-          mv -v "${windows_x64_debug_name}/"OBS-Studio-*-pdbs.zip \
-            "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-x64-PDBs.zip
-          mv -v "${windows_arm64_artifact_name}/"OBS-Studio-*.zip \
+          if [[ -d "${windows_x64_installer_name:-}" ]]; then
+            mv -v "${windows_x64_installer_name}/"OBS-Studio-*.exe \
+              "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-x64-Installer.exe
+          fi
+          if [[ -d "${windows_x64_debug_name:-}" ]]; then
+            mv -v "${windows_x64_debug_name}/"OBS-Studio-*-pdbs.zip \
+              "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-x64-PDBs.zip
+          fi
+          mv -v "${windows_arm64_artifact_name}/"obs-studio-*-windows-arm64.zip \
             "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-arm64.zip
-          mv -v "${windows_arm64_debug_name}/"OBS-Studio-*-pdbs.zip \
-            "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-arm64-PDBs.zip
+          if [[ -d "${windows_arm64_debug_name:-}" ]]; then
+            mv -v "${windows_arm64_debug_name}/"OBS-Studio-*-pdbs.zip \
+              "${root_dir}"/OBS-Studio-${{ steps.check.outputs.version }}-Windows-arm64-PDBs.zip
+          fi
           echo '::endgroup::'
 
       - name: Generate Checksums 🪪
