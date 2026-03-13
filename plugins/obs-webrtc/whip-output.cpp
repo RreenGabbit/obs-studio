@@ -11,7 +11,7 @@
  * 576-1470, with a lower value equating to more packets created,
  * but also better network compatability.
  */
-static uint16_t MAX_VIDEO_FRAGMENT_SIZE = 1200;
+static uint16_t MAX_VIDEO_FRAGMENT_SIZE = 1000;
 
 const int signaling_media_id_length = 16;
 const char signaling_media_id_valid_char[] = "0123456789"
