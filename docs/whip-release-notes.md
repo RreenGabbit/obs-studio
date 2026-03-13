@@ -1,5 +1,10 @@
 WHIP Fix Build v1
 
+Scope
+- Validated for `NVIDIA NVENC H.264` over `WHIP/WebRTC`
+- Not validated for `AV1`
+- Not validated for `AMD` encoders
+
 Base
 - Branch: `whip-pacing-fix`
 - Recommended commit/build: `b9c231bfc`
@@ -42,4 +47,5 @@ Recommended OBS Settings
 Notes
 - RTMP can look fine while WHIP/WebRTC still shows keyframe-related issues; that is expected.
 - This build is aimed at SRS/WHIP low-latency behavior, not RTMP.
+- The tested recovery and encoder override path is NVIDIA-specific in this branch.
 - If keyframe artifacts are still too visible, the next likely area is receiver/playout behavior rather than more sender pacing changes.
