@@ -113,8 +113,11 @@ bool WHIPOutput::Start()
 
 	if (!obs_output_can_begin_data_capture(output, 0))
 		return false;
-	if (!obs_output_initialize_encoders(output, 0))
+	ApplyWhipEncoderOverrides();
+	if (!obs_output_initialize_encoders(output, 0)) {
+		RestoreWhipEncoderOverrides();
 		return false;
+	}
 
 	if (start_stop_thread.joinable())
 		start_stop_thread.join();
@@ -726,6 +729,7 @@ void WHIPOutput::StopThread(bool signal)
 	last_keyframe_request_ns = 0;
 	start_time_ns = 0;
 	last_audio_timestamp = 0;
+	RestoreWhipEncoderOverrides();
 	videoLayerStates.clear();
 }
 
@@ -757,6 +761,57 @@ bool WHIPOutput::ForceEncoderKeyframe(obs_encoder_t *encoder)
 	do_log(LOG_INFO, "Requested NVENC IDR for encoder '%s' (%s)", obs_encoder_get_name(encoder),
 	       obs_encoder_get_id(encoder));
 	return true;
+}
+
+void WHIPOutput::ApplyWhipEncoderOverrides()
+{
+	for (uint32_t idx = 0; idx < MAX_OUTPUT_VIDEO_ENCODERS; idx++) {
+		auto encoder = obs_output_get_video_encoder2(output, idx);
+		if (!encoder)
+			break;
+		if (!IsNvencEncoder(encoder))
+			continue;
+
+		OBSDataAutoRelease settings = obs_encoder_get_settings(encoder);
+		if (!settings)
+			continue;
+
+		encoderOptsState state;
+		state.had_user_opts = obs_data_has_user_value(settings, "opts");
+		state.opts = obs_data_get_string(settings, "opts");
+		encoderOptsStates[encoder] = state;
+
+		const long long bitrate_kbps = obs_data_get_int(settings, "bitrate");
+		if (bitrate_kbps <= 0)
+			continue;
+
+		const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 250;
+		std::string opts = state.opts;
+		if (!opts.empty())
+			opts += " ";
+		opts += "vbvBufferSize=" + std::to_string(vbv_bits);
+		opts += " vbvInitialDelay=" + std::to_string(vbv_bits);
+
+		obs_data_set_string(settings, "opts", opts.c_str());
+		do_log(LOG_INFO, "Applied WHIP NVENC VBV override to encoder '%s': %s", obs_encoder_get_name(encoder),
+		       opts.c_str());
+	}
+}
+
+void WHIPOutput::RestoreWhipEncoderOverrides()
+{
+	for (const auto &[encoder, state] : encoderOptsStates) {
+		OBSDataAutoRelease settings = obs_encoder_get_settings(encoder);
+		if (!settings)
+			continue;
+
+		if (state.had_user_opts)
+			obs_data_set_string(settings, "opts", state.opts.c_str());
+		else
+			obs_data_unset_user_value(settings, "opts");
+	}
+
+	encoderOptsStates.clear();
 }
 
 void WHIPOutput::MaybeForceVideoKeyframe()
