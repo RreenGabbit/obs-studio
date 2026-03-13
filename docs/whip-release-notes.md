@@ -23,9 +23,3 @@ Recommended OBS Settings
 - Lookahead: `Off`
 - Adaptive Quantization: `Off`
 - Resolution / FPS: `1920x1080 @ 60fps`
-
-Notes
-- RTMP can look fine while WHIP/WebRTC still shows keyframe-related issues; that is expected.
-- This build is aimed at SRS/WHIP low-latency behavior, not RTMP.
-- The tested recovery and encoder override path is NVIDIA-specific in this branch.
-- If keyframe artifacts are still too visible, the next likely area is receiver/playout behavior rather than more sender pacing changes.
