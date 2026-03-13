@@ -22,11 +22,6 @@ struct videoLayerState {
 	std::string rid;
 };
 
-struct encoderOptsState {
-	bool had_user_opts;
-	std::string opts;
-};
-
 class WHIPOutput {
 public:
 	WHIPOutput(obs_data_t *settings, obs_output_t *output);
@@ -55,8 +50,6 @@ private:
 	void HandleVideoTrackMessage(const rtc::binary &data);
 	void MaybeForceVideoKeyframe();
 	bool ForceEncoderKeyframe(obs_encoder_t *encoder);
-	void ApplyWhipEncoderOverrides();
-	void RestoreWhipEncoderOverrides();
 
 	obs_output_t *output;
 
@@ -77,7 +70,6 @@ private:
 	std::shared_ptr<rtc::RtcpSrReporter> video_sr_reporter;
 
 	std::map<obs_encoder_t *, std::shared_ptr<videoLayerState>> videoLayerStates;
-	std::map<obs_encoder_t *, encoderOptsState> encoderOptsStates;
 
 	std::atomic<size_t> total_bytes_sent;
 	std::atomic<int> connect_time_ms;
