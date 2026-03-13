@@ -273,9 +273,9 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>(video_nack_buffer_size));
 
 	if (video_bitrate != 0) {
-		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 5000),
+		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
 									    std::chrono::milliseconds(5)));
-		do_log(LOG_INFO, "WHIP video pacing: bitrate=%dkbps budget=5x interval=5ms", video_bitrate);
+		do_log(LOG_INFO, "WHIP video pacing: bitrate=%dkbps budget=10x interval=5ms", video_bitrate);
 	}
 
 
