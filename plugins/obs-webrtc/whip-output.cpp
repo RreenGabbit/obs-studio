@@ -785,7 +785,7 @@ void WHIPOutput::ApplyWhipEncoderOverrides()
 		if (bitrate_kbps <= 0)
 			continue;
 
-		const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 250;
+		const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 375;
 		std::string opts = state.opts;
 		if (!opts.empty())
 			opts += " ";
