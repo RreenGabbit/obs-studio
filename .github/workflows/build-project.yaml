@@ -40,10 +40,32 @@ jobs:
               if [[ ${GITHUB_REF_NAME} =~ [0-9]+.[0-9]+.[0-9]+(-(rc|beta).+)? ]]; then
                 config_data[1]='notarize:true'
                 config_data[3]='config:Release'
+              elif [[ ${GITHUB_REF_TYPE} == 'tag' && ${GITHUB_REF_NAME} =~ ^whip-fix-v[0-9]+$ ]]; then
+                config_data[0]='codesign:false'
+                config_data[1]='notarize:false'
+                config_data[2]='package:true'
+                config_data[3]='config:RelWithDebInfo'
+              elif [[ "${GITHUB_REPOSITORY_OWNER}" != "obsproject" ]]; then
+                config_data[0]='codesign:false'
               fi
               ;;
             workflow_dispatch)
               config_data=('codesign:true' 'notarize:false' 'package:false' 'config:RelWithDebInfo')
+              if [[ ${GITHUB_REF_TYPE} == 'tag' ]]; then
+                config_data[2]='package:true'
+                if [[ ${GITHUB_REF_NAME} =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta).+)?$ ]]; then
+                  config_data[1]='notarize:true'
+                  config_data[3]='config:Release'
+                elif [[ ${GITHUB_REF_NAME} =~ ^whip-vbv-.*$ || ${GITHUB_REF_NAME} =~ ^[0-9]+\.[0-9]+\.[0-9]+-whip-vbv$ ]]; then
+                  config_data[0]='codesign:false'
+                  config_data[1]='notarize:false'
+                  config_data[2]='package:true'
+                  config_data[3]='config:RelWithDebInfo'
+                fi
+              fi
+              if [[ "${GITHUB_REPOSITORY_OWNER}" != "obsproject" ]]; then
+                config_data[0]='codesign:false'
+              fi
               ;;
             schedule)
               config_data=('codesign:true' 'notarize:false' 'package:true' 'config:RelWithDebInfo')

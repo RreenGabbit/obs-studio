@@ -1319,13 +1319,27 @@ static inline int get_avc_profile(obs_data_t *settings)
 	return AMF_VIDEO_ENCODER_PROFILE_HIGH;
 }
 
+static int64_t get_whip_vbv_override_bits(amf_base *enc, int64_t bitrate)
+{
+	obs_data_t *settings = obs_encoder_get_settings(enc->encoder);
+	if (!settings)
+		return 0;
+
+	const int64_t whip_vbv_ms = obs_data_get_int(settings, "whip_vbv_ms");
+	const int64_t whip_vbv_bits = whip_vbv_ms > 0 ? (bitrate * whip_vbv_ms) / 1000 : 0;
+	obs_data_release(settings);
+	return whip_vbv_bits;
+}
+
 static void amf_avc_update_data(amf_base *enc, int rc, int64_t bitrate, int64_t qp)
 {
+	const int64_t whip_vbv_bits = get_whip_vbv_override_bits(enc, bitrate);
+
 	if (rc != AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTANT_QP &&
 	    rc != AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_QUALITY_VBR) {
 		set_avc_property(enc, TARGET_BITRATE, bitrate);
 		set_avc_property(enc, PEAK_BITRATE, bitrate);
-		set_avc_property(enc, VBV_BUFFER_SIZE, bitrate);
+		set_avc_property(enc, VBV_BUFFER_SIZE, whip_vbv_bits > 0 ? whip_vbv_bits : bitrate);
 
 		if (rc == AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR) {
 			set_avc_property(enc, FILLER_DATA_ENABLE, true);
@@ -1779,11 +1793,13 @@ static inline int get_hevc_rate_control(const char *rc_str)
 
 static void amf_hevc_update_data(amf_base *enc, int rc, int64_t bitrate, int64_t qp)
 {
+	const int64_t whip_vbv_bits = get_whip_vbv_override_bits(enc, bitrate);
+
 	if (rc != AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CONSTANT_QP &&
 	    rc != AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_QUALITY_VBR) {
 		set_hevc_property(enc, TARGET_BITRATE, bitrate);
 		set_hevc_property(enc, PEAK_BITRATE, bitrate);
-		set_hevc_property(enc, VBV_BUFFER_SIZE, bitrate);
+		set_hevc_property(enc, VBV_BUFFER_SIZE, whip_vbv_bits > 0 ? whip_vbv_bits : bitrate);
 
 		if (rc == AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR) {
 			set_hevc_property(enc, FILLER_DATA_ENABLE, true);
@@ -2181,11 +2197,13 @@ static inline int get_av1_profile(obs_data_t *settings)
 
 static void amf_av1_update_data(amf_base *enc, int rc, int64_t bitrate, int64_t cq_value)
 {
+	const int64_t whip_vbv_bits = get_whip_vbv_override_bits(enc, bitrate);
+
 	if (rc != AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CONSTANT_QP &&
 	    rc != AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_QUALITY_VBR) {
 		set_av1_property(enc, TARGET_BITRATE, bitrate);
 		set_av1_property(enc, PEAK_BITRATE, bitrate);
-		set_av1_property(enc, VBV_BUFFER_SIZE, bitrate);
+		set_av1_property(enc, VBV_BUFFER_SIZE, whip_vbv_bits > 0 ? whip_vbv_bits : bitrate);
 
 		if (rc == AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR) {
 			set_av1_property(enc, FILLER_DATA, true);
