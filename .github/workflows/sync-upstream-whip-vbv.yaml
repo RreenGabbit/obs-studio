@@ -49,7 +49,12 @@ jobs:
           if [[ -n "${{ inputs.upstream_tag || '' }}" ]]; then
             upstream_tag="${{ inputs.upstream_tag }}"
           else
-            upstream_tag="$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
+            upstream_tag="$(
+              git tag --list |
+                grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
+                sort -V -r |
+                head -n1
+            )"
           fi
 
           if [[ -z "${upstream_tag}" ]]; then
