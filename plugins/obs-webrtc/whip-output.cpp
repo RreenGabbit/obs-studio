@@ -2,16 +2,14 @@
 #include "whip-utils.h"
 
 #include <obs.hpp>
-#include <cstddef>
 #include <cstring>
-#include <variant>
 
 /*
  * Sets the maximum size for a video fragment. Effective range is
  * 576-1470, with a lower value equating to more packets created,
  * but also better network compatability.
  */
-static uint16_t MAX_VIDEO_FRAGMENT_SIZE = 1000;
+static uint16_t MAX_VIDEO_FRAGMENT_SIZE = 1200;
 
 const int signaling_media_id_length = 16;
 const char signaling_media_id_valid_char[] = "0123456789"
@@ -31,37 +29,11 @@ const int video_nack_buffer_size = 4000;
 
 const std::string rtpHeaderExtUriMid = "urn:ietf:params:rtp-hdrext:sdes:mid";
 const std::string rtpHeaderExtUriRid = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
-static constexpr uint64_t KEYFRAME_REQUEST_INTERVAL_NS = 250000000ULL;
 
 static bool IsNvencEncoder(const obs_encoder_t *encoder)
 {
 	const char *id = obs_encoder_get_id(encoder);
 	return id != nullptr && strstr(id, "nvenc") != nullptr;
-}
-
-static bool IsRtcpPliOrFir(const rtc::binary &data)
-{
-	size_t pos = 0;
-
-	while (pos + 4 <= data.size()) {
-		const uint8_t v_p_count = std::to_integer<uint8_t>(data[pos]);
-		const uint8_t version = v_p_count >> 6;
-		const uint8_t fmt = v_p_count & 0x1F;
-		const uint8_t payload_type = std::to_integer<uint8_t>(data[pos + 1]);
-		const uint16_t length_words = (uint16_t(std::to_integer<uint8_t>(data[pos + 2])) << 8) |
-					      uint16_t(std::to_integer<uint8_t>(data[pos + 3]));
-		const size_t packet_size = (size_t(length_words) + 1) * 4;
-
-		if (version != 2 || packet_size < 4 || pos + packet_size > data.size())
-			return false;
-
-		if (payload_type == 206 && (fmt == 1 || fmt == 4))
-			return true;
-
-		pos += packet_size;
-	}
-
-	return false;
 }
 
 WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
@@ -78,8 +50,6 @@ WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
 	  video_track(nullptr),
 	  total_bytes_sent(0),
 	  connect_time_ms(0),
-	  keyframe_request_pending(false),
-	  last_keyframe_request_ns(0),
 	  start_time_ns(0),
 	  last_audio_timestamp(0)
 {
@@ -148,8 +118,6 @@ void WHIPOutput::Data(struct encoder_packet *packet)
 		Send(packet->data, packet->size, duration, audio_track, audio_sr_reporter);
 		last_audio_timestamp = packet->dts_usec;
 	} else if (video_track && packet->type == OBS_ENCODER_VIDEO) {
-		MaybeForceVideoKeyframe();
-
 		auto rtp_config = video_sr_reporter->rtpConfig;
 		auto videoLayerState = videoLayerStates[packet->encoder];
 		if (videoLayerState == nullptr) {
@@ -278,16 +246,10 @@ void WHIPOutput::ConfigureVideoTrack(std::string media_stream_id, std::string cn
 	if (video_bitrate != 0) {
 		packetizer->addToChain(std::make_shared<rtc::PacingHandler>(static_cast<double>(video_bitrate * 10000),
 									    std::chrono::milliseconds(5)));
-		do_log(LOG_INFO, "WHIP video pacing: bitrate=%dkbps budget=10x interval=5ms", video_bitrate);
 	}
-
 
 	video_track = peer_connection->addTrack(video_description);
 	video_track->setMediaHandler(packetizer);
-	video_track->onMessage([this](rtc::message_variant data) {
-		if (const auto *binary = std::get_if<rtc::binary>(&data))
-			HandleVideoTrackMessage(*binary);
-	});
 }
 
 /**
@@ -725,42 +687,10 @@ void WHIPOutput::StopThread(bool signal)
 
 	total_bytes_sent = 0;
 	connect_time_ms = 0;
-	keyframe_request_pending = false;
-	last_keyframe_request_ns = 0;
 	start_time_ns = 0;
 	last_audio_timestamp = 0;
 	RestoreWhipEncoderOverrides();
 	videoLayerStates.clear();
-}
-
-void WHIPOutput::HandleVideoTrackMessage(const rtc::binary &data)
-{
-	if (!IsRtcpPliOrFir(data))
-		return;
-
-	uint64_t now_ns = os_gettime_ns();
-	uint64_t previous_ns = last_keyframe_request_ns.load();
-	if (previous_ns != 0 && now_ns - previous_ns < KEYFRAME_REQUEST_INTERVAL_NS)
-		return;
-
-	last_keyframe_request_ns.store(now_ns);
-	keyframe_request_pending.store(true);
-	do_log(LOG_INFO, "WHIP video track received RTCP PLI/FIR; scheduling encoder keyframe");
-}
-
-bool WHIPOutput::ForceEncoderKeyframe(obs_encoder_t *encoder)
-{
-	if (!encoder || !IsNvencEncoder(encoder))
-		return false;
-
-	OBSDataAutoRelease settings = obs_encoder_get_settings(encoder);
-	if (!settings)
-		return false;
-
-	obs_encoder_update(encoder, settings);
-	do_log(LOG_INFO, "Requested NVENC IDR for encoder '%s' (%s)", obs_encoder_get_name(encoder),
-	       obs_encoder_get_id(encoder));
-	return true;
 }
 
 void WHIPOutput::ApplyWhipEncoderOverrides()
@@ -812,25 +742,6 @@ void WHIPOutput::RestoreWhipEncoderOverrides()
 	}
 
 	encoderOptsStates.clear();
-}
-
-void WHIPOutput::MaybeForceVideoKeyframe()
-{
-	if (!keyframe_request_pending.exchange(false))
-		return;
-
-	bool requested = false;
-
-	for (uint32_t idx = 0; idx < MAX_OUTPUT_VIDEO_ENCODERS; idx++) {
-		auto encoder = obs_output_get_video_encoder2(output, idx);
-		if (!encoder)
-			break;
-
-		requested |= ForceEncoderKeyframe(encoder);
-	}
-
-	if (!requested)
-		do_log(LOG_WARNING, "WHIP received RTCP PLI/FIR but no NVENC video encoder was available for IDR request");
 }
 
 void WHIPOutput::Send(void *data, uintptr_t size, uint64_t duration, std::shared_ptr<rtc::Track> track,
