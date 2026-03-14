@@ -4,7 +4,8 @@ run-name: Release WHIP Windows - ${{ github.ref_name }} 🪟
 on:
   push:
     tags:
-      - 'whip-vbv-v*'
+      - 'whip-vbv-*'
+      - '*-whip-vbv'
 
 permissions:
   contents: write
@@ -24,7 +25,7 @@ jobs:
         run: |
           shopt -s extglob
           case "${GITHUB_REF_NAME}" in
-            whip-vbv-v+([0-9]) )
+            whip-vbv-* | +([0-9]).+([0-9]).+([0-9])-whip-vbv* )
               echo 'validTag=true' >> $GITHUB_OUTPUT
               echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
               ;;
