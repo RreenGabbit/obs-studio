@@ -4,7 +4,7 @@ run-name: Release WHIP Windows - ${{ github.ref_name }} 🪟
 on:
   push:
     tags:
-      - 'whip-fix-v*'
+      - 'whip-vbv-v*'
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
         run: |
           shopt -s extglob
           case "${GITHUB_REF_NAME}" in
-            whip-fix-v+([0-9]) )
+            whip-vbv-v+([0-9]) )
               echo 'validTag=true' >> $GITHUB_OUTPUT
               echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
               ;;
@@ -100,6 +100,6 @@ jobs:
           draft: false
           prerelease: true
           tag_name: ${{ needs.check-tag.outputs.version }}
-          name: WHIP Fix Build ${{ needs.check-tag.outputs.version }}
+          name: WHIP VBV Build ${{ needs.check-tag.outputs.version }}
           files: |
             OBS-Studio-${{ needs.check-tag.outputs.version }}-Windows-x64.zip

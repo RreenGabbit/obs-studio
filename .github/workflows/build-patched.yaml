@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - master
-      - 'whip-pacing-fix'
+      - 'whip-vbv'
   workflow_dispatch:
 
 permissions:

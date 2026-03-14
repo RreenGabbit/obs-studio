@@ -231,6 +231,11 @@ jobs:
       run:
         shell: bash
     steps:
+      - uses: actions/checkout@v4
+        if: github.ref_type == 'tag'
+        with:
+          fetch-depth: 1
+
       - name: Check Release Tag ☑️
         id: check
         run: |
@@ -249,7 +254,7 @@ jobs:
               echo 'prerelease=true' >> $GITHUB_OUTPUT
               echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
               ;;
-            whip-fix-v+([0-9]) )
+            whip-vbv-v+([0-9]) )
               echo 'validTag=true' >> $GITHUB_OUTPUT
               echo 'prerelease=true' >> $GITHUB_OUTPUT
               echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
@@ -339,6 +344,13 @@ jobs:
             echo "    ${file##*/}: $(sha256sum "${file}" | cut -d " " -f 1)" >> ${{ github.workspace }}/CHECKSUMS.txt
           done
 
+      - name: Build Release Notes 📝
+        if: fromJSON(steps.check.outputs.validTag)
+        run: |
+          cat "${GITHUB_WORKSPACE}/docs/whip-release-notes.md" > "${GITHUB_WORKSPACE}/RELEASE_NOTES.txt"
+          printf "\n\n" >> "${GITHUB_WORKSPACE}/RELEASE_NOTES.txt"
+          cat "${GITHUB_WORKSPACE}/CHECKSUMS.txt" >> "${GITHUB_WORKSPACE}/RELEASE_NOTES.txt"
+
       - name: Create Release 🛫
         if: fromJSON(steps.check.outputs.validTag)
         id: create_release
@@ -348,7 +360,7 @@ jobs:
           prerelease: ${{ fromJSON(steps.check.outputs.prerelease) }}
           tag_name: ${{ steps.check.outputs.version }}
           name: OBS Studio ${{ steps.check.outputs.version }}
-          body_path: ${{ github.workspace }}/CHECKSUMS.txt
+          body_path: ${{ github.workspace }}/RELEASE_NOTES.txt
           files: |
             ${{ github.workspace }}/OBS-Studio-${{ steps.check.outputs.version }}-macOS-*.dmg
             ${{ github.workspace }}/OBS-Studio-${{ steps.check.outputs.version }}-macOS-*-dSYMs.tar.xz
