@@ -10,6 +10,11 @@ on:
         description: Optional upstream OBS tag to patch instead of latest stable
         required: false
         type: string
+      patch_ref:
+        description: Optional git ref to copy the WHIP VBV overlay from
+        required: false
+        default: origin/whip-vbv
+        type: string
 
 permissions:
   contents: write
@@ -34,10 +39,13 @@ jobs:
         run: |
           git remote add upstream https://github.com/obsproject/obs-studio.git || true
           git fetch upstream --tags --force --quiet
+          git fetch origin whip-vbv --force --quiet
 
       - name: Select Upstream Tag
         id: select
         run: |
+          patch_ref="${{ inputs.patch_ref || 'origin/whip-vbv' }}"
+
           if [[ -n "${{ inputs.upstream_tag || '' }}" ]]; then
             upstream_tag="${{ inputs.upstream_tag }}"
           else
@@ -55,6 +63,7 @@ jobs:
           echo "upstream_tag=${upstream_tag}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
           echo "branch_name=${branch_name}" >> "$GITHUB_OUTPUT"
+          echo "patch_ref=${patch_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Skip If Release Tag Exists
         id: exists
@@ -70,7 +79,7 @@ jobs:
         run: |
           workdir="$(mktemp -d)"
           git worktree add --detach "${workdir}" "refs/tags/${{ steps.select.outputs.upstream_tag }}"
-          ./.github/scripts/apply-whip-vbv-overlay.sh HEAD "${workdir}"
+          ./.github/scripts/apply-whip-vbv-overlay.sh "${{ steps.select.outputs.patch_ref }}" "${workdir}"
 
           pushd "${workdir}" >/dev/null
           git checkout -B "${{ steps.select.outputs.branch_name }}"
