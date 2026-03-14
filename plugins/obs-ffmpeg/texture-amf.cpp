@@ -1321,12 +1321,14 @@ static inline int get_avc_profile(obs_data_t *settings)
 
 static int64_t get_whip_vbv_override_bits(amf_base *enc, int64_t bitrate)
 {
-	OBSDataAutoRelease settings = obs_encoder_get_settings(enc->encoder);
+	obs_data_t *settings = obs_encoder_get_settings(enc->encoder);
 	if (!settings)
 		return 0;
 
 	const int64_t whip_vbv_ms = obs_data_get_int(settings, "whip_vbv_ms");
-	return whip_vbv_ms > 0 ? (bitrate * whip_vbv_ms) / 1000 : 0;
+	const int64_t whip_vbv_bits = whip_vbv_ms > 0 ? (bitrate * whip_vbv_ms) / 1000 : 0;
+	obs_data_release(settings);
+	return whip_vbv_bits;
 }
 
 static void amf_avc_update_data(amf_base *enc, int rc, int64_t bitrate, int64_t qp)
