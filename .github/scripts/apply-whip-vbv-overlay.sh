@@ -10,6 +10,7 @@ source_ref=$1
 target_dir=$2
 
 files=(
+  ".github/scripts/Build-Windows.ps1"
   ".github/workflows/build-patched.yaml"
   ".github/workflows/build-project.yaml"
   ".github/workflows/push.yaml"
