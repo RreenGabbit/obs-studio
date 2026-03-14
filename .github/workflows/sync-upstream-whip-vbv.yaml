@@ -1,0 +1,101 @@
+name: Sync Upstream WHIP VBV
+run-name: Sync latest OBS to WHIP VBV
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: Optional upstream OBS tag to patch instead of latest stable
+        required: false
+        type: string
+      patch_ref:
+        description: Optional git ref to copy the WHIP VBV overlay from
+        required: false
+        default: origin/whip-vbv
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch Upstream
+        run: |
+          git remote add upstream https://github.com/obsproject/obs-studio.git || true
+          git fetch upstream --tags --force --quiet
+          git fetch origin whip-vbv --force --quiet
+
+      - name: Select Upstream Tag
+        id: select
+        run: |
+          patch_ref="${{ inputs.patch_ref || 'origin/whip-vbv' }}"
+
+          if [[ -n "${{ inputs.upstream_tag || '' }}" ]]; then
+            upstream_tag="${{ inputs.upstream_tag }}"
+          else
+            upstream_tag="$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
+          fi
+
+          if [[ -z "${upstream_tag}" ]]; then
+            echo "No upstream tag found" >&2
+            exit 1
+          fi
+
+          release_tag="${upstream_tag}-whip-vbv"
+          branch_name="whip-vbv-upstream-${upstream_tag}"
+
+          echo "upstream_tag=${upstream_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "branch_name=${branch_name}" >> "$GITHUB_OUTPUT"
+          echo "patch_ref=${patch_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip If Release Tag Exists
+        id: exists
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.select.outputs.release_tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare Patched Tree
+        if: steps.exists.outputs.exists != 'true'
+        run: |
+          workdir="$(mktemp -d)"
+          git worktree add --detach "${workdir}" "refs/tags/${{ steps.select.outputs.upstream_tag }}"
+          ./.github/scripts/apply-whip-vbv-overlay.sh "${{ steps.select.outputs.patch_ref }}" "${workdir}"
+
+          pushd "${workdir}" >/dev/null
+          git checkout -B "${{ steps.select.outputs.branch_name }}"
+          git add .github/workflows/build-patched.yaml \
+            .github/workflows/build-project.yaml \
+            .github/workflows/push.yaml \
+            .github/workflows/release-whip-windows.yaml \
+            cmake/common/versionconfig.cmake \
+            docs/whip-release-notes.md \
+            plugins/obs-ffmpeg/texture-amf.cpp \
+            plugins/obs-webrtc/whip-output.cpp \
+            plugins/obs-webrtc/whip-output.h
+          git commit -m "whip-vbv: apply 200ms VBV patch to ${{ steps.select.outputs.upstream_tag }}"
+          git push origin HEAD:refs/heads/${{ steps.select.outputs.branch_name }} --force
+          git tag -f "${{ steps.select.outputs.release_tag }}"
+          git push origin "refs/tags/${{ steps.select.outputs.release_tag }}" --force
+          popd >/dev/null
+
+          git worktree remove "${workdir}" --force
