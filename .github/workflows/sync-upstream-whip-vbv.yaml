@@ -92,6 +92,7 @@ jobs:
           pushd "${workdir}" >/dev/null
           git checkout -B "${{ steps.select.outputs.branch_name }}"
           git add .github/workflows/build-patched.yaml \
+            .github/scripts/Build-Windows.ps1 \
             .github/workflows/build-project.yaml \
             .github/workflows/push.yaml \
             .github/workflows/release-whip-windows.yaml \
