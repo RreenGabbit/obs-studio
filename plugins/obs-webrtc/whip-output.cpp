@@ -36,6 +36,12 @@ static bool IsNvencEncoder(const obs_encoder_t *encoder)
 	return id != nullptr && strstr(id, "nvenc") != nullptr;
 }
 
+static bool IsAmfEncoder(const obs_encoder_t *encoder)
+{
+	const char *id = obs_encoder_get_id(encoder);
+	return id != nullptr && strstr(id, "_amf") != nullptr;
+}
+
 WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
 	: output(output),
 	  endpoint_url(),
@@ -699,7 +705,7 @@ void WHIPOutput::ApplyWhipEncoderOverrides()
 		auto encoder = obs_output_get_video_encoder2(output, idx);
 		if (!encoder)
 			break;
-		if (!IsNvencEncoder(encoder))
+		if (!IsNvencEncoder(encoder) && !IsAmfEncoder(encoder))
 			continue;
 
 		OBSDataAutoRelease settings = obs_encoder_get_settings(encoder);
@@ -709,22 +715,30 @@ void WHIPOutput::ApplyWhipEncoderOverrides()
 		encoderOptsState state;
 		state.had_user_opts = obs_data_has_user_value(settings, "opts");
 		state.opts = obs_data_get_string(settings, "opts");
+		state.had_whip_vbv_ms = obs_data_has_user_value(settings, "whip_vbv_ms");
+		state.whip_vbv_ms = obs_data_get_int(settings, "whip_vbv_ms");
 		encoderOptsStates[encoder] = state;
 
-		const long long bitrate_kbps = obs_data_get_int(settings, "bitrate");
-		if (bitrate_kbps <= 0)
-			continue;
+		if (IsNvencEncoder(encoder)) {
+			const long long bitrate_kbps = obs_data_get_int(settings, "bitrate");
+			if (bitrate_kbps <= 0)
+				continue;
 
-		const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 250;
-		std::string opts = state.opts;
-		if (!opts.empty())
-			opts += " ";
-		opts += "vbvBufferSize=" + std::to_string(vbv_bits);
-		opts += " vbvInitialDelay=" + std::to_string(vbv_bits);
+			const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 250;
+			std::string opts = state.opts;
+			if (!opts.empty())
+				opts += " ";
+			opts += "vbvBufferSize=" + std::to_string(vbv_bits);
+			opts += " vbvInitialDelay=" + std::to_string(vbv_bits);
 
-		obs_data_set_string(settings, "opts", opts.c_str());
-		do_log(LOG_INFO, "Applied WHIP NVENC VBV override to encoder '%s': %s", obs_encoder_get_name(encoder),
-		       opts.c_str());
+			obs_data_set_string(settings, "opts", opts.c_str());
+			do_log(LOG_INFO, "Applied WHIP NVENC VBV override to encoder '%s': %s",
+			       obs_encoder_get_name(encoder), opts.c_str());
+		} else if (IsAmfEncoder(encoder)) {
+			obs_data_set_int(settings, "whip_vbv_ms", 250);
+			do_log(LOG_INFO, "Applied WHIP AMF VBV override to encoder '%s': whip_vbv_ms=250",
+			       obs_encoder_get_name(encoder));
+		}
 	}
 }
 
@@ -739,6 +753,11 @@ void WHIPOutput::RestoreWhipEncoderOverrides()
 			obs_data_set_string(settings, "opts", state.opts.c_str());
 		else
 			obs_data_unset_user_value(settings, "opts");
+
+		if (state.had_whip_vbv_ms)
+			obs_data_set_int(settings, "whip_vbv_ms", state.whip_vbv_ms);
+		else
+			obs_data_unset_user_value(settings, "whip_vbv_ms");
 	}
 
 	encoderOptsStates.clear();

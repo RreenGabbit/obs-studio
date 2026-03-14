@@ -25,6 +25,8 @@ struct videoLayerState {
 struct encoderOptsState {
 	bool had_user_opts;
 	std::string opts;
+	bool had_whip_vbv_ms = false;
+	long long whip_vbv_ms = 0;
 };
 
 class WHIPOutput {
