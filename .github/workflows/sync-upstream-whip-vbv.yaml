@@ -17,6 +17,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -81,6 +82,8 @@ jobs:
 
       - name: Prepare Patched Tree
         if: steps.exists.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           workdir="$(mktemp -d)"
           git worktree add --detach "${workdir}" "refs/tags/${{ steps.select.outputs.upstream_tag }}"
@@ -104,3 +107,7 @@ jobs:
           popd >/dev/null
 
           git worktree remove "${workdir}" --force
+
+          gh workflow run Push \
+            --repo "${{ github.repository }}" \
+            --ref "${{ steps.select.outputs.release_tag }}"
