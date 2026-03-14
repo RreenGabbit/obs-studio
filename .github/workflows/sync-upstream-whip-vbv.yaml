@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       upstream_tag:
-        description: Optional upstream OBS tag to patch instead of latest stable
+        description: Optional upstream OBS release tag to patch instead of the latest upstream release
         required: false
         type: string
       patch_ref:
@@ -42,24 +42,21 @@ jobs:
           git fetch upstream --tags --force --quiet
           git fetch origin whip-vbv --force --quiet
 
-      - name: Select Upstream Tag
+      - name: Select Upstream Release
         id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           patch_ref="${{ inputs.patch_ref || 'origin/whip-vbv' }}"
 
           if [[ -n "${{ inputs.upstream_tag || '' }}" ]]; then
             upstream_tag="${{ inputs.upstream_tag }}"
           else
-            upstream_tag="$(
-              git tag --list |
-                grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' |
-                sort -V -r |
-                head -n1
-            )"
+            upstream_tag="$(gh api repos/obsproject/obs-studio/releases/latest --jq .tag_name)"
           fi
 
           if [[ -z "${upstream_tag}" ]]; then
-            echo "No upstream tag found" >&2
+            echo "No upstream release tag found" >&2
             exit 1
           fi
 
