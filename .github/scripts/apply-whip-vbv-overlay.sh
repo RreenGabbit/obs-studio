@@ -14,7 +14,6 @@ files=(
   ".github/workflows/build-patched.yaml"
   ".github/workflows/build-project.yaml"
   ".github/workflows/push.yaml"
-  ".github/workflows/release-whip-windows.yaml"
   "cmake/common/versionconfig.cmake"
   "docs/whip-release-notes.md"
   "plugins/obs-ffmpeg/texture-amf.cpp"
