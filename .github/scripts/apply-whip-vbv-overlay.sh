@@ -11,9 +11,6 @@ target_dir=$2
 
 files=(
   ".github/scripts/Build-Windows.ps1"
-  ".github/workflows/build-patched.yaml"
-  ".github/workflows/build-project.yaml"
-  ".github/workflows/push.yaml"
   "cmake/common/versionconfig.cmake"
   "docs/whip-release-notes.md"
   "plugins/obs-ffmpeg/texture-amf.cpp"
