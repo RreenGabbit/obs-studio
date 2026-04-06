@@ -2,6 +2,7 @@
 #include "whip-utils.h"
 
 #include <obs.hpp>
+#include <cstring>
 
 /*
  * Sets the maximum size for a video fragment. Effective range is
@@ -28,6 +29,18 @@ const int video_nack_buffer_size = 4000;
 
 const std::string rtpHeaderExtUriMid = "urn:ietf:params:rtp-hdrext:sdes:mid";
 const std::string rtpHeaderExtUriRid = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
+
+static bool IsNvencEncoder(const obs_encoder_t *encoder)
+{
+	const char *id = obs_encoder_get_id(encoder);
+	return id != nullptr && strstr(id, "nvenc") != nullptr;
+}
+
+static bool IsAmfEncoder(const obs_encoder_t *encoder)
+{
+	const char *id = obs_encoder_get_id(encoder);
+	return id != nullptr && strstr(id, "_amf") != nullptr;
+}
 
 WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
 	: output(output),
@@ -76,8 +89,11 @@ bool WHIPOutput::Start()
 
 	if (!obs_output_can_begin_data_capture(output, 0))
 		return false;
-	if (!obs_output_initialize_encoders(output, 0))
+	ApplyWhipEncoderOverrides();
+	if (!obs_output_initialize_encoders(output, 0)) {
+		RestoreWhipEncoderOverrides();
 		return false;
+	}
 
 	if (start_stop_thread.joinable())
 		start_stop_thread.join();
@@ -679,7 +695,72 @@ void WHIPOutput::StopThread(bool signal)
 	connect_time_ms = 0;
 	start_time_ns = 0;
 	last_audio_timestamp = 0;
+	RestoreWhipEncoderOverrides();
 	videoLayerStates.clear();
+}
+
+void WHIPOutput::ApplyWhipEncoderOverrides()
+{
+	for (uint32_t idx = 0; idx < MAX_OUTPUT_VIDEO_ENCODERS; idx++) {
+		auto encoder = obs_output_get_video_encoder2(output, idx);
+		if (!encoder)
+			break;
+		if (!IsNvencEncoder(encoder) && !IsAmfEncoder(encoder))
+			continue;
+
+		OBSDataAutoRelease settings = obs_encoder_get_settings(encoder);
+		if (!settings)
+			continue;
+
+		encoderOptsState state;
+		state.had_user_opts = obs_data_has_user_value(settings, "opts");
+		state.opts = obs_data_get_string(settings, "opts");
+		state.had_whip_vbv_ms = obs_data_has_user_value(settings, "whip_vbv_ms");
+		state.whip_vbv_ms = obs_data_get_int(settings, "whip_vbv_ms");
+		encoderOptsStates[encoder] = state;
+
+		if (IsNvencEncoder(encoder)) {
+			const long long bitrate_kbps = obs_data_get_int(settings, "bitrate");
+			if (bitrate_kbps <= 0)
+				continue;
+
+			const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 200;
+			std::string opts = state.opts;
+			if (!opts.empty())
+				opts += " ";
+			opts += "vbvBufferSize=" + std::to_string(vbv_bits);
+			opts += " vbvInitialDelay=" + std::to_string(vbv_bits);
+
+			obs_data_set_string(settings, "opts", opts.c_str());
+			do_log(LOG_INFO, "Applied WHIP NVENC VBV override to encoder '%s': %s",
+			       obs_encoder_get_name(encoder), opts.c_str());
+		} else if (IsAmfEncoder(encoder)) {
+			obs_data_set_int(settings, "whip_vbv_ms", 200);
+			do_log(LOG_INFO, "Applied WHIP AMF VBV override to encoder '%s': whip_vbv_ms=200",
+			       obs_encoder_get_name(encoder));
+		}
+	}
+}
+
+void WHIPOutput::RestoreWhipEncoderOverrides()
+{
+	for (const auto &[encoder, state] : encoderOptsStates) {
+		OBSDataAutoRelease settings = obs_encoder_get_settings(encoder);
+		if (!settings)
+			continue;
+
+		if (state.had_user_opts)
+			obs_data_set_string(settings, "opts", state.opts.c_str());
+		else
+			obs_data_unset_user_value(settings, "opts");
+
+		if (state.had_whip_vbv_ms)
+			obs_data_set_int(settings, "whip_vbv_ms", state.whip_vbv_ms);
+		else
+			obs_data_unset_user_value(settings, "whip_vbv_ms");
+	}
+
+	encoderOptsStates.clear();
 }
 
 void WHIPOutput::Send(void *data, uintptr_t size, uint64_t duration, std::shared_ptr<rtc::Track> track,
