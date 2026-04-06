@@ -83,11 +83,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           workdir="$(mktemp -d)"
-          git worktree add --detach "${workdir}" "refs/tags/${{ steps.select.outputs.upstream_tag }}"
-          ./.github/scripts/apply-whip-vbv-overlay.sh "${{ steps.select.outputs.patch_ref }}" "${workdir}"
+          git worktree add --detach "${workdir}" "refs/remotes/origin/master"
 
           pushd "${workdir}" >/dev/null
           git checkout -B "${{ steps.select.outputs.branch_name }}"
+          git restore \
+            --source "refs/tags/${{ steps.select.outputs.upstream_tag }}" \
+            --staged \
+            --worktree \
+            -- . ':(exclude).github/workflows/**'
+          popd >/dev/null
+
+          ./.github/scripts/apply-whip-vbv-overlay.sh "${{ steps.select.outputs.patch_ref }}" "${workdir}"
+
+          pushd "${workdir}" >/dev/null
           git add .github/scripts/Build-Windows.ps1 \
             cmake/common/versionconfig.cmake \
             docs/whip-release-notes.md \
