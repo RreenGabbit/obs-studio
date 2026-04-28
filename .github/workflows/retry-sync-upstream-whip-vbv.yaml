@@ -1,0 +1,31 @@
+name: Retry Sync Upstream WHIP VBV
+run-name: Retry failed WHIP VBV sync
+
+on:
+  workflow_run:
+    workflows:
+      - Sync Upstream WHIP VBV
+    types:
+      - completed
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  retry:
+    if: >-
+      ${{
+        github.event.workflow_run.event == 'schedule' &&
+        github.event.workflow_run.conclusion != 'success' &&
+        github.event.workflow_run.run_attempt == 1
+      }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Retry scheduled sync once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run "Sync Upstream WHIP VBV" \
+            --repo "${{ github.repository }}" \
+            --ref master
