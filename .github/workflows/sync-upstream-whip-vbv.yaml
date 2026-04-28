@@ -20,6 +20,10 @@ permissions:
   actions: write
   contents: write
 
+concurrency:
+  group: sync-upstream-whip-vbv
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-24.04
