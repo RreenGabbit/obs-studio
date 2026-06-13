@@ -57,8 +57,7 @@ WHIPOutput::WHIPOutput(obs_data_t *, obs_output_t *output)
 	  video_track(nullptr),
 	  total_bytes_sent(0),
 	  connect_time_ms(0),
-	  start_time_ns(0),
-	  last_audio_timestamp(0)
+	  start_time_ns(0)
 {
 }
 
@@ -121,9 +120,7 @@ void WHIPOutput::Data(struct encoder_packet *packet)
 	}
 
 	if (audio_track && packet->type == OBS_ENCODER_AUDIO) {
-		int64_t duration = packet->dts_usec - last_audio_timestamp;
-		Send(packet->data, packet->size, duration, audio_track, audio_sr_reporter);
-		last_audio_timestamp = packet->dts_usec;
+		Send(packet->data, packet->size, packet->dts_usec, audio_track, audio_sr_reporter);
 	} else if (video_track && packet->type == OBS_ENCODER_VIDEO) {
 		auto rtp_config = video_sr_reporter->rtpConfig;
 		auto videoLayerState = videoLayerStates[packet->encoder];
@@ -136,14 +133,10 @@ void WHIPOutput::Data(struct encoder_packet *packet)
 		rtp_config->sequenceNumber = videoLayerState->sequenceNumber;
 		rtp_config->ssrc = videoLayerState->ssrc;
 		rtp_config->rid = videoLayerState->rid;
-		rtp_config->timestamp = videoLayerState->rtpTimestamp;
-		int64_t duration = packet->dts_usec - videoLayerState->lastVideoTimestamp;
 
-		Send(packet->data, packet->size, duration, video_track, video_sr_reporter);
+		Send(packet->data, packet->size, packet->dts_usec, video_track, video_sr_reporter);
 
 		videoLayerState->sequenceNumber = rtp_config->sequenceNumber;
-		videoLayerState->lastVideoTimestamp = packet->dts_usec;
-		videoLayerState->rtpTimestamp = rtp_config->timestamp;
 	}
 }
 
@@ -687,7 +680,6 @@ void WHIPOutput::StopThread(bool signal)
 	total_bytes_sent = 0;
 	connect_time_ms = 0;
 	start_time_ns = 0;
-	last_audio_timestamp = 0;
 	RestoreWhipEncoderOverrides();
 	videoLayerStates.clear();
 }
@@ -757,7 +749,7 @@ void WHIPOutput::RestoreWhipEncoderOverrides()
 	encoderOptsStates.clear();
 }
 
-void WHIPOutput::Send(void *data, uintptr_t size, uint64_t duration, std::shared_ptr<rtc::Track> track,
+void WHIPOutput::Send(void *data, uintptr_t size, int64_t dts_usec, std::shared_ptr<rtc::Track> track,
 		      std::shared_ptr<rtc::RtcpSrReporter> rtcp_sr_reporter)
 {
 	if (track == nullptr || !track->isOpen())
@@ -767,14 +759,11 @@ void WHIPOutput::Send(void *data, uintptr_t size, uint64_t duration, std::shared
 
 	auto rtp_config = rtcp_sr_reporter->rtpConfig;
 
-	// Sample time is in microseconds, we need to convert it to seconds
-	auto elapsed_seconds = double(duration) / (1000.0 * 1000.0);
+	// Derive each timestamp from absolute DTS so per-frame rounding cannot accumulate into stream drift.
+	auto elapsed_seconds = double(dts_usec) / (1000.0 * 1000.0);
 
-	// Get elapsed time in clock rate
 	uint32_t elapsed_timestamp = rtp_config->secondsToTimestamp(elapsed_seconds);
-
-	// Set new timestamp
-	rtp_config->timestamp = rtp_config->timestamp + elapsed_timestamp;
+	rtp_config->timestamp = rtp_config->startTimestamp + elapsed_timestamp;
 
 #if RTC_VERSION_MAJOR == 0 && RTC_VERSION_MINOR < 23
 	// Get elapsed time in clock rate from last RTCP sender report
