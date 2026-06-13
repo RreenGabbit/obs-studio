@@ -26,6 +26,7 @@ const uint8_t video_payload_type = 96;
 
 // ~3 seconds of 8.5 Megabit video
 const int video_nack_buffer_size = 4000;
+const long long whip_vbv_ms = 250;
 
 const std::string rtpHeaderExtUriMid = "urn:ietf:params:rtp-hdrext:sdes:mid";
 const std::string rtpHeaderExtUriRid = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
@@ -724,7 +725,8 @@ void WHIPOutput::ApplyWhipEncoderOverrides()
 			if (bitrate_kbps <= 0)
 				continue;
 
-			const uint64_t vbv_bits = static_cast<uint64_t>(bitrate_kbps) * 200;
+			const uint64_t vbv_bits =
+				static_cast<uint64_t>(bitrate_kbps) * static_cast<uint64_t>(whip_vbv_ms);
 			std::string opts = state.opts;
 			if (!opts.empty())
 				opts += " ";
@@ -735,9 +737,9 @@ void WHIPOutput::ApplyWhipEncoderOverrides()
 			do_log(LOG_INFO, "Applied WHIP NVENC VBV override to encoder '%s': %s",
 			       obs_encoder_get_name(encoder), opts.c_str());
 		} else if (IsAmfEncoder(encoder)) {
-			obs_data_set_int(settings, "whip_vbv_ms", 200);
-			do_log(LOG_INFO, "Applied WHIP AMF VBV override to encoder '%s': whip_vbv_ms=200",
-			       obs_encoder_get_name(encoder));
+			obs_data_set_int(settings, "whip_vbv_ms", whip_vbv_ms);
+			do_log(LOG_INFO, "Applied WHIP AMF VBV override to encoder '%s': whip_vbv_ms=%lld",
+			       obs_encoder_get_name(encoder), whip_vbv_ms);
 		}
 	}
 }

@@ -6,8 +6,8 @@ Scope
 - Directly tested with `NVIDIA NVENC H.264`
 
 What Changed
-- Added a WHIP-only `200ms` VBV override for `NVIDIA NVENC`
-- Added a WHIP-only `200ms` VBV override for `AMD AMF`
+- Added a WHIP-only `250ms` VBV override for `NVIDIA NVENC`
+- Added a WHIP-only `250ms` VBV override for `AMD AMF`
 - Leaves non-WHIP encoder settings untouched by restoring the original values on stop
 
 Tested OBS Settings
