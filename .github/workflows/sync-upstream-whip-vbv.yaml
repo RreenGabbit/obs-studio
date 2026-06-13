@@ -15,6 +15,11 @@ on:
         required: false
         default: origin/whip-vbv
         type: string
+      force_rebuild:
+        description: Rebuild and replace an existing patched release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   actions: write
@@ -75,7 +80,9 @@ jobs:
       - name: Skip If Release Tag Exists
         id: exists
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.select.outputs.release_tag }}" >/dev/null 2>&1; then
+          if [[ "${{ inputs.force_rebuild || false }}" == "true" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/${{ steps.select.outputs.release_tag }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
