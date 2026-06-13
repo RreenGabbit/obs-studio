@@ -8,6 +8,7 @@ Scope
 What Changed
 - Added a WHIP-only `250ms` VBV override for `NVIDIA NVENC`
 - Added a WHIP-only `250ms` VBV override for `AMD AMF`
+- Removed WHIP packet-level pacing that could accumulate stream delay over time
 - Leaves non-WHIP encoder settings untouched by restoring the original values on stop
 
 Tested OBS Settings
