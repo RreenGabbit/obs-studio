@@ -26,6 +26,31 @@ if ( $PSVersionTable.PSVersion -lt '7.2.0' ) {
     exit 2
 }
 
+function Invoke-BuildWithRetry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $BuildArgs,
+
+        [int] $MaxAttempts = 2,
+
+        [int] $RetryDelaySeconds = 5
+    )
+
+    for ($Attempt = 1; $Attempt -le $MaxAttempts; $Attempt++) {
+        try {
+            Invoke-External cmake @BuildArgs
+            return
+        } catch {
+            if ($Attempt -ge $MaxAttempts) {
+                throw
+            }
+
+            Write-Warning "cmake build failed on attempt ${Attempt}/${MaxAttempts}; retrying in ${RetryDelaySeconds}s"
+            Start-Sleep -Seconds $RetryDelaySeconds
+        }
+    }
+}
+
 function Build {
     trap {
         Pop-Location -Stack BuildTemp -ErrorAction 'SilentlyContinue'
@@ -77,7 +102,7 @@ function Build {
     Invoke-External cmake @CmakeArgs
 
     Log-Group "Building obs-studio..."
-    Invoke-External cmake @CmakeBuildArgs
+    Invoke-BuildWithRetry -BuildArgs $CmakeBuildArgs
 
     Log-Group "Installing obs-studio..."
     Invoke-External cmake @CmakeInstallArgs

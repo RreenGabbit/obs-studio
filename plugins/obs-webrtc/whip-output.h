@@ -22,6 +22,13 @@ struct videoLayerState {
 	std::string rid;
 };
 
+struct encoderOptsState {
+	bool had_user_opts;
+	std::string opts;
+	bool had_whip_vbv_ms = false;
+	long long whip_vbv_ms = 0;
+};
+
 class WHIPOutput {
 public:
 	WHIPOutput(obs_data_t *settings, obs_output_t *output);
@@ -47,6 +54,8 @@ private:
 	void ParseLinkHeader(std::string linkHeader, std::vector<rtc::IceServer> &iceServers);
 	void Send(void *data, uintptr_t size, uint64_t duration, std::shared_ptr<rtc::Track> track,
 		  std::shared_ptr<rtc::RtcpSrReporter> rtcp_sr_reporter);
+	void ApplyWhipEncoderOverrides();
+	void RestoreWhipEncoderOverrides();
 
 	obs_output_t *output;
 
@@ -67,6 +76,7 @@ private:
 	std::shared_ptr<rtc::RtcpSrReporter> video_sr_reporter;
 
 	std::map<obs_encoder_t *, std::shared_ptr<videoLayerState>> videoLayerStates;
+	std::map<obs_encoder_t *, encoderOptsState> encoderOptsStates;
 
 	std::atomic<size_t> total_bytes_sent;
 	std::atomic<int> connect_time_ms;
